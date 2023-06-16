@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TimeVault</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-GLhlTQ8iRABdZLl6O3oVMWSktQOp6b7In1Zl3/Jr59b6EGGoI1aFkw7cmDA6j6gD" crossorigin="anonymous">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: "Lato", sans-serif;
+        }
+
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            margin-top: 60px;
+            padding: 40px;
+            background-color: #ffffff;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        h2 {
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .account-info {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .account-info p {
+            font-size: 16px;
+            margin: 0;
+        }
+
+        .input-container {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 30px;
+        }
+
+        .input-container button {
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .loader-container {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            margin: 30px;
+            margin-left: 140px;
+        }
+
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+            color: #6c757d;
+        }
+
+        .funds-info {
+            margin-top: 30px;
+            text-align: center;
+        }
+
+        .funds-info p {
+            margin-bottom: 10px;
+        }
+
+        #error-message {
+            color: #dc3545;
+            font-size: 14px;
+            margin-top: 10px;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h2>TimeVault</h2>
+
+        <div class="account-info">
+            <button id="connect" class="btn btn-primary">Connect</button>
+        </div>
+
+        <div class="input-container">
+            <button id="deposit" class="btn btn-primary">Deposit</button>
+            <button id="withdraw" class="btn btn-primary">Withdraw</button>
+        </div>
+
+        <div class="loader-container" id="spinner-container">
+            <div class="spinner-border" role="status"></div>
+        </div>
+
+        <div class="funds-info">
+            <p id="funds-message"></p>
+            <p id="error-message"></p>
+        </div>
+    </div>
+
+    <script src="https://cdn.ethers.io/lib/ethers-5.2.umd.min.js" type="application/javascript"></script>
+    <script>
+        const provider = ((window.ethereum != null) ? new ethers.providers.Web3Provider(window.ethereum) : ethers.providers.getDefaultProvider());
+        let address = "";
+        let spinner = document.getElementById("spinner-container");
+        let connectButton = document.getElementById('connect');
+        let inputContent = document.querySelector(".input-container");
+        let depositButton = document.getElementById('deposit');
+        let withdrawButton = document.getElementById('withdraw');
+        let fundsMessage = document.getElementById('funds-message');
+        let errorMessage = document.getElementById('error-message');
+
+        connectButton.addEventListener('click', getAccounts);
+        depositButton.addEventListener('click', deposit);
+        withdrawButton.addEventListener('click', withdraw);
+
+        const contractAddress = "0xe94677dba06B54F60Ab7D5ab5b4aE2F7dA25ABfC";
+        const ABI = [
+            {
+                "inputs": [],
+                "name": "deposit",
+                "outputs": [],
+                "stateMutability": "payable",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "withdraw",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [
+                    {
+                        "internalType": "address",
+                        "name": "",
+                        "type": "address"
+                    }
+                ],
+                "name": "balanceOf",
+                "outputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "",
+                        "type": "uint256"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [
+                    {
+                        "internalType": "address",
+                        "name": "_account",
+                        "type": "address"
+                    }
+                ],
+                "name": "depositTime",
+                "outputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "_depositTime",
+                        "type": "uint256"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            }
+        ];
+
+        async function getAccounts() {
+            let accounts = await provider.send('eth_requestAccounts', []);
+            if (accounts.length) {
+                address = accounts[0];
+                document.getElementById('connect').remove();
+                contractInit();
+                await loadExistingFund();
+            }
+        }
+
+        function contractInit() {
+            contract = new ethers.Contract(contractAddress, ABI, provider.getSigner());
+            inputContent.style.display = "flex";
+        }
+
+        async function fetchExistingDeposit() {
+            const depositTime = await contract.depositTime(address);
+            const tokenBalance = await contract.balanceOf(address);
+            return {
+                depositTime,
+                tokenBalance
+            };
+        }
+
+        async function loadExistingFund() {
+            loader(true);
+            const result = await fetchExistingDeposit();
+            const depositStatus = result.depositTime != 0 ? "Deposited" : "Not Deposited";
+            fundsMessage.innerHTML = `Deposit Status: ${depositStatus}<br>Token Balance: ${result.tokenBalance}`;
+            loader(false);
+        }
+
+        function loader(status) {
+            if (status) {
+                spinner.style.display = "block";
+            } else {
+                spinner.style.display = "none";
+            }
+        }
+
+        async function deposit() {
+            const existingFund = await fetchExistingDeposit();
+            if (existingFund.depositTime != 0) {
+                errorMessage.textContent = "Existing deposit found!";
+                return;
+            }
+            loader(true);
+            const tx = await contract.deposit({ value: 1 });
+            await waitForConfirmation(tx.hash);
+            await loadExistingFund();
+            loader(false);
+            errorMessage.textContent = "";
+        }
+
+        async function withdraw() {
+            const existingFund = await fetchExistingDeposit();
+            if (existingFund.depositTime == 0) {
+                errorMessage.textContent = "Deposit not found!";
+                return;
+            }
+            loader(true);
+            const tx = await contract.withdraw();
+            await waitForConfirmation(tx.hash);
+            await loadExistingFund();
+            loader(false);
+            errorMessage.textContent = "";
+        }
+
+        async function waitForConfirmation(txHash) {
+            while (true) {
+                const receipt = await provider.send('eth_getTransactionReceipt', [txHash]);
+                if (receipt && receipt.blockNumber) {
+                    break;
+                }
+                // Wait for a few seconds before checking again
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+        }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-w76AqPfDkMBDXo30jS1Sgez6pr3x5MlQ1ZAGC+nuZB+EYdgRZgiwxhTBTkF7CXvN" crossorigin="anonymous">
+    </script>
+</body>
+
+</html>
